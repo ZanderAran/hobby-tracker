@@ -228,25 +228,32 @@
     }
 
     async function pushToCloud(){
-      if (!CLOUD_SYNC_URL) return;
+      if (!CLOUD_SYNC_URL) return true;
       try {
         const res = await fetch(CLOUD_SYNC_URL, {
           method: 'POST',
-          headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // <-- avoids preflight
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // avoids preflight
           body: JSON.stringify({ secret: CLOUD_SECRET, entries })
         });
-        // Optional debug:
-        const data = await res.json().catch(() => ({}));
-        console.log('pushToCloud status', res.status, data);
-        if (!res.ok || data.ok === false) {
-          alert('Cloud save failed: ' + (data.error || res.status));
+    
+        // Try to read JSON; if parsing fails, don't treat it as a hard error.
+        let data = null;
+        try { data = await res.json(); } catch (_) {}
+    
+        // Success if HTTP 2xx AND (no data or data.ok !== false)
+        if (res.ok && (!data || data.ok !== false)) {
+          console.log('Cloud save OK', { status: res.status, data });
+          return true;
         }
+    
+        console.warn('Cloud save uncertain/failed', { status: res.status, data });
+        return false; // don't alert here; let caller decide
       } catch (err) {
-        console.error('pushToCloud error', err);
-        alert('Cloud save error (likely CORS or network). Check console.');
+        console.error('Cloud save error', err);
+        return false;
       }
     }
-
+    
     function saveAll() {
       localStorage.setItem(LS_KEYS.entries, JSON.stringify(entries));
       localStorage.setItem(LS_KEYS.categories, JSON.stringify(categories));
