@@ -173,6 +173,9 @@
       subactivities: 'hobby.subactivities.v1' // array of {name, category}
     };
 
+    const CLOUD_SYNC_URL = 'https://script.google.com/macros/s/AKfycbwjFWpwIhGC5ypj9VMVmN4a7MRUIk4VgAu5GFGmyNFc6jlE4uD-ltAzIkFrCQMHq8F5sA/exec'; // ends with /exec
+    const CLOUD_SECRET = 'protect-hobbies'; // must match SECRET in Apps Script
+    
     /** @type {Array<{id:string,date:string,category:string,subactivity:string,minutes:number,tags:string[],notes:string}>} */
     let entries = [];
     /** @type {Array<{name:string}>} */
@@ -212,7 +215,24 @@
 
     // --- Utils ---
     const id = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
-
+    async function pullFromCloud(){
+      if (!CLOUD_SYNC_URL) return;
+      const res = await fetch(CLOUD_SYNC_URL);
+      const data = await res.json();
+      if (Array.isArray(data.entries)) {
+        entries = data.entries;
+        saveAll(); // keep local copy for offline
+      }
+    }
+    
+    async function pushToCloud(){
+      if (!CLOUD_SYNC_URL) return;
+      await fetch(CLOUD_SYNC_URL, {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ secret: CLOUD_SECRET, entries })
+      });
+    }
     function saveAll() {
       localStorage.setItem(LS_KEYS.entries, JSON.stringify(entries));
       localStorage.setItem(LS_KEYS.categories, JSON.stringify(categories));
@@ -465,6 +485,7 @@
         categories = data.categories || [];
         subactivities = data.subactivities || [];
         saveAll();
+        pushToCloud().catch(()=>{/* ignore for offline */});
         populateCategorySelects();
         populateSubactivitySelect();
         refreshUI();
@@ -479,6 +500,7 @@
     // --- Init ---
     loadAll();
     ensureSeedData();
+    await pullFromCloud().catch(()=>{/* offline ok */});
     saveAll();
     populateCategorySelects();
     populateSubactivitySelect();
