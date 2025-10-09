@@ -11,8 +11,8 @@
     .container { max-width: 1100px; }
     /* Hide file input */
     input[type="file"] { display:none; }
-    /* Simple chips */
-    .chip { @apply inline-block text-xs px-2 py-1 rounded bg-gray-200 mr-1 mb-1; }
+    /* Simple chips — plain CSS since @apply doesn't work without a build step */
+    .chip { display:inline-block; font-size:0.75rem; line-height:1rem; padding:0.25rem 0.5rem; border-radius:0.5rem; background:#e5e7eb; margin-right:0.25rem; margin-bottom:0.25rem; }
   </style>
 </head>
 <body class="bg-slate-100 text-slate-900">
@@ -173,9 +173,10 @@
       subactivities: 'hobby.subactivities.v1' // array of {name, category}
     };
 
+    // --- Cloud sync config ---
     const CLOUD_SYNC_URL = 'https://script.google.com/macros/s/AKfycbwjFWpwIhGC5ypj9VMVmN4a7MRUIk4VgAu5GFGmyNFc6jlE4uD-ltAzIkFrCQMHq8F5sA/exec'; // ends with /exec
-    const CLOUD_SECRET = 'protect-hobbies'; // must match SECRET in Apps Script
-    
+    const CLOUD_SECRET = 'protect-hobbies'; // must match Apps Script SECRET
+
     /** @type {Array<{id:string,date:string,category:string,subactivity:string,minutes:number,tags:string[],notes:string}>} */
     let entries = [];
     /** @type {Array<{name:string}>} */
@@ -215,6 +216,7 @@
 
     // --- Utils ---
     const id = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
+
     async function pullFromCloud(){
       if (!CLOUD_SYNC_URL) return;
       const res = await fetch(CLOUD_SYNC_URL);
@@ -224,7 +226,7 @@
         saveAll(); // keep local copy for offline
       }
     }
-    
+
     async function pushToCloud(){
       if (!CLOUD_SYNC_URL) return;
       await fetch(CLOUD_SYNC_URL, {
@@ -233,6 +235,7 @@
         body: JSON.stringify({ secret: CLOUD_SECRET, entries })
       });
     }
+
     function saveAll() {
       localStorage.setItem(LS_KEYS.entries, JSON.stringify(entries));
       localStorage.setItem(LS_KEYS.categories, JSON.stringify(categories));
@@ -281,11 +284,9 @@
     }
 
     function resetForm() {
-      // Default to now, rounded to minutes
       const now = new Date();
       now.setSeconds(0,0);
-      const local = new Date(now.getTime() - (now.getTimezoneOffset() * 60000))
-                      .toISOString().slice(0,16);
+      const local = new Date(now.getTime() - (now.getTimezoneOffset() * 60000)).toISOString().slice(0,16);
       dateInput.value = local;
       categorySelect.value = '';
       populateSubactivitySelect();
@@ -323,7 +324,7 @@
 
     function getFilters() {
       const from = filterFrom.value ? new Date(filterFrom.value) : null;
-      const to = filterTo.value ? new Date(filterTo.value) : null; // inclusive end-of-day handled below
+      const to = filterTo.value ? new Date(filterTo.value) : null;
       const cat = filterCategory.value || '';
       const tag = filterTag.value.trim().toLowerCase();
       return { from, to, cat, tag };
@@ -351,7 +352,6 @@
       totalHoursEl.textContent = (totalMin/60).toFixed(1);
       totalEntriesEl.textContent = String(filtered.length);
 
-      // By Category chips
       const byCat = {};
       filtered.forEach(e => { byCat[e.category] = (byCat[e.category]||0) + Number(e.minutes||0); });
       byCategoryEl.innerHTML = '';
@@ -393,7 +393,6 @@
     function startEdit(entryId) {
       const e = entries.find(x => x.id === entryId);
       if (!e) return;
-      // Fill form
       const d = new Date(e.date);
       d.setSeconds(0,0);
       const local = new Date(d.getTime() - (d.getTimezoneOffset()*60000)).toISOString().slice(0,16);
@@ -412,6 +411,7 @@
       if (!confirm('Delete this entry?')) return;
       entries = entries.filter(e => e.id !== entryId);
       saveAll();
+      pushToCloud().catch(()=>{});
       refreshUI();
     }
 
@@ -434,18 +434,17 @@
 
       const existingId = entryForm.dataset.editingId;
       if (existingId) {
-        // update
         const idx = entries.findIndex(e => e.id === existingId);
         if (idx >= 0) entries[idx] = { ...entries[idx], date: new Date(when).toISOString(), category, subactivity: sub, minutes, tags, notes };
         entryForm.dataset.editingId = '';
       } else {
         entries.push({ id: id(), date: new Date(when).toISOString(), category, subactivity: sub, minutes, tags, notes });
       }
-      // ensure subactivity/category exist in master lists (in case user typed through prompt before)
       if (!categories.some(c => c.name === category)) categories.push({ name: category });
       if (!subactivities.some(s => s.name === sub && s.category === category)) subactivities.push({ name: sub, category });
 
       saveAll();
+      pushToCloud().catch(()=>{});
       populateCategorySelects();
       populateSubactivitySelect();
       resetForm();
@@ -462,10 +461,7 @@
     });
 
     exportBtn.addEventListener('click', () => {
-      const payload = {
-        exportedAt: new Date().toISOString(),
-        entries, categories, subactivities
-      };
+      const payload = { exportedAt: new Date().toISOString(), entries, categories, subactivities };
       const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -485,7 +481,7 @@
         categories = data.categories || [];
         subactivities = data.subactivities || [];
         saveAll();
-        pushToCloud().catch(()=>{/* ignore for offline */});
+        pushToCloud().catch(()=>{});
         populateCategorySelects();
         populateSubactivitySelect();
         refreshUI();
@@ -497,15 +493,17 @@
       }
     });
 
-    // --- Init ---
-    loadAll();
-    ensureSeedData();
-    await pullFromCloud().catch(()=>{/* offline ok */});
-    saveAll();
-    populateCategorySelects();
-    populateSubactivitySelect();
-    resetForm();
-    refreshUI();
+    // --- Init (wrapped to allow await) ---
+    (async () => {
+      loadAll();
+      ensureSeedData();
+      await pullFromCloud().catch(()=>{}); // offline ok
+      saveAll();
+      populateCategorySelects();
+      populateSubactivitySelect();
+      resetForm();
+      refreshUI();
+    })();
   </script>
 </body>
 </html>
