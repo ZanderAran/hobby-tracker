@@ -229,11 +229,22 @@
 
     async function pushToCloud(){
       if (!CLOUD_SYNC_URL) return;
-      await fetch(CLOUD_SYNC_URL, {
-        method: 'POST',
-        headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ secret: CLOUD_SECRET, entries })
-      });
+      try {
+        const res = await fetch(CLOUD_SYNC_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // <-- avoids preflight
+          body: JSON.stringify({ secret: CLOUD_SECRET, entries })
+        });
+        // Optional debug:
+        const data = await res.json().catch(() => ({}));
+        console.log('pushToCloud status', res.status, data);
+        if (!res.ok || data.ok === false) {
+          alert('Cloud save failed: ' + (data.error || res.status));
+        }
+      } catch (err) {
+        console.error('pushToCloud error', err);
+        alert('Cloud save error (likely CORS or network). Check console.');
+      }
     }
 
     function saveAll() {
