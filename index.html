@@ -176,36 +176,69 @@
       setupTimer(div);
     });
 
-    function setupTimer(div){
-      let seconds=0,interval=null,running=false;
-      const timerEl=div.querySelector('.timer');
-      const startBtn=div.querySelector('.startBtn');
-      const submitBtn=div.querySelector('.submitBtn');
-      const removeBtn=div.querySelector('.removeBtn');
-      startBtn.addEventListener('click',()=>{
-        if(!running){running=true;startBtn.textContent='Stop';interval=setInterval(()=>{seconds++;const h=String(Math.floor(seconds/3600)).padStart(2,'0');const m=String(Math.floor(seconds%3600/60)).padStart(2,'0');const s=String(seconds%60).padStart(2,'0');timerEl.textContent=`${h}:${m}:${s}`;},1000);}else{running=false;startBtn.textContent='Start';clearInterval(interval);}});
-      removeBtn.addEventListener('click',()=>{clearInterval(interval);div.remove();});
-      submitBtn.addEventListener('click',async()=>{
-        if(seconds<10)return alert('Timer must run for at least 10 seconds');
-        const category=div.querySelector('.category').value;
-        const sub=div.querySelector('.sub').value;
-        const notes=div.querySelector('.notes').value;
-        const minutes=Math.round(seconds/60)||1;
-        entries.push({id:id(),date:new Date().toISOString(),category,subactivity:sub,minutes,tags:[],notes});
-        saveAll(); await pushToCloud(); refreshUI();
-        clearInterval(interval); div.remove();
-      });
+function setupTimer(div) {
+  let startTime = null, elapsed = 0, interval = null, running = false;
+  const timerEl = div.querySelector('.timer');
+  const startBtn = div.querySelector('.startBtn');
+  const submitBtn = div.querySelector('.submitBtn');
+  const removeBtn = div.querySelector('.removeBtn');
+
+  function updateDisplay() {
+    const totalSec = Math.floor(elapsed / 1000);
+    const h = String(Math.floor(totalSec / 3600)).padStart(2, '0');
+    const m = String(Math.floor((totalSec % 3600) / 60)).padStart(2, '0');
+    const s = String(totalSec % 60).padStart(2, '0');
+    timerEl.textContent = `${h}:${m}:${s}`;
+  }
+
+  startBtn.addEventListener('click', () => {
+    if (!running) {
+      running = true;
+      startTime = Date.now() - elapsed; // resume where left off
+      startBtn.textContent = 'Stop';
+      interval = setInterval(() => {
+        elapsed = Date.now() - startTime;
+        updateDisplay();
+      }, 500);
+    } else {
+      running = false;
+      clearInterval(interval);
+      elapsed = Date.now() - startTime;
+      startBtn.textContent = 'Start';
+      updateDisplay();
     }
+  });
 
-    exportBtn.addEventListener('click',()=>{
-      const blob=new Blob([JSON.stringify({entries,categories,subactivities},null,2)],{type:'application/json'});
-      const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='hobby-tracker-export.json';a.click();URL.revokeObjectURL(url);
-    });
+  removeBtn.addEventListener('click', () => {
+    clearInterval(interval);
+    div.remove();
+  });
 
-    importFile.addEventListener('change',async e=>{
-      const file=e.target.files?.[0];if(!file)return;const text=await file.text();
-      try{const data=JSON.parse(text);entries=data.entries||[];categories=data.categories||[];subactivities=data.subactivities||[];saveAll();await pushToCloud();refreshUI();alert('Import complete');}catch(err){alert('Import failed: '+err.message);}finally{importFile.value='';}
+  submitBtn.addEventListener('click', async () => {
+    const totalMinutes = Math.round(elapsed / 60000);
+    if (totalMinutes <= 0) return alert('Timer must run at least 1 minute');
+    const category = div.querySelector('.category').value;
+    const sub = div.querySelector('.sub').value;
+    const notes = div.querySelector('.notes').value;
+    entries.push({
+      id: id(),
+      date: new Date().toISOString(),
+      category,
+      subactivity: sub,
+      minutes: totalMinutes,
+      tags: [],
+      notes,
     });
+    saveAll();
+    await pushToCloud();
+    refreshUI();
+    clearInterval(interval);
+    div.remove();
+  });
+
+  updateDisplay();
+}
+
 
     (async()=>{loadAll();ensureSeedData();await pullFromCloud().catch(()=>{});saveAll();refreshUI();})();
   </script>
