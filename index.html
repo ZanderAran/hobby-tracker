@@ -5,17 +5,18 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Hobby Time Tracker</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     .container { max-width: 1100px; }
     .chip { display:inline-block; font-size:0.75rem; line-height:1rem; padding:0.25rem 0.5rem; border-radius:0.5rem; background:#e5e7eb; margin-right:0.25rem; margin-bottom:0.25rem; }
   </style>
 </head>
+
 <body class="bg-slate-100 text-slate-900">
   <header class="bg-white shadow">
     <div class="container mx-auto px-4 py-4 flex items-center justify-between">
       <h1 class="text-xl font-semibold">Hobby Time Tracker</h1>
       <div class="flex items-center gap-2">
-        <button id="newTimerBtn" class="px-3 py-1.5 rounded bg-green-600 text-white hover:bg-green-500">＋ New Timer</button>
         <button id="exportBtn" class="px-3 py-1.5 rounded bg-slate-800 text-white hover:bg-slate-700">Export JSON</button>
         <label for="importFile" class="px-3 py-1.5 rounded bg-slate-200 hover:bg-slate-300 cursor-pointer">Import JSON</label>
         <input id="importFile" type="file" accept="application/json" />
@@ -24,31 +25,51 @@
   </header>
 
   <main class="container mx-auto px-4 py-6">
-    <section id="timersContainer" class="mb-6"></section>
 
+    <!-- SUMMARY -->
     <section class="bg-white p-4 rounded-2xl shadow mb-6">
       <h2 class="text-lg font-semibold mb-3">Summary</h2>
       <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div class="p-3 rounded-xl bg-slate-50 border">
-          <div class="text-sm text-slate-500">Total Minutes (filtered)</div>
+          <div class="text-sm text-slate-500">Total Minutes</div>
           <div id="totalMinutes" class="text-2xl font-semibold">0</div>
         </div>
         <div class="p-3 rounded-xl bg-slate-50 border">
-          <div class="text-sm text-slate-500">Total Hours (filtered)</div>
+          <div class="text-sm text-slate-500">Total Hours</div>
           <div id="totalHours" class="text-2xl font-semibold">0.0</div>
         </div>
         <div class="p-3 rounded-xl bg-slate-50 border">
-          <div class="text-sm text-slate-500">Entries (filtered)</div>
+          <div class="text-sm text-slate-500">Entries</div>
           <div id="totalEntries" class="text-2xl font-semibold">0</div>
         </div>
       </div>
-
       <div class="mt-4">
         <h3 class="font-semibold mb-2">By Category</h3>
         <div id="byCategory" class="flex flex-wrap gap-2"></div>
       </div>
     </section>
 
+    <!-- 📊 TIME USAGE GRAPH -->
+    <section class="bg-white p-4 rounded-2xl shadow mb-6">
+      <h2 class="text-lg font-semibold mb-3">Time Usage Graph</h2>
+      <div class="flex flex-wrap gap-4 items-end mb-4">
+        <div>
+          <label class="block text-sm mb-1">Group By</label>
+          <select id="graphGroupBy" class="border rounded px-2 py-1">
+            <option value="category" selected>Category</option>
+            <option value="subactivity">Subactivity</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm mb-1">Filter by Tags</label>
+          <input id="graphTagFilter" type="text" placeholder="e.g. painting, gaming" class="border rounded px-2 py-1 w-64" />
+        </div>
+        <button id="updateGraphBtn" class="px-4 py-2 rounded bg-slate-800 text-white hover:bg-slate-700">Update Graph</button>
+      </div>
+      <canvas id="timeChart" class="w-full h-80"></canvas>
+    </section>
+
+    <!-- ENTRIES TABLE -->
     <section class="bg-white p-4 rounded-2xl shadow">
       <h2 class="text-lg font-semibold mb-3">Entries</h2>
       <div class="overflow-x-auto">
@@ -67,176 +88,123 @@
         </table>
       </div>
     </section>
+
   </main>
 
-  <template id="rowTemplate">
-    <tr class="border-b">
-      <td class="px-3 py-2 align-top font-mono"></td>
-      <td class="px-3 py-2 align-top"></td>
-      <td class="px-3 py-2 align-top"></td>
-      <td class="px-3 py-2 align-top"></td>
-      <td class="px-3 py-2 align-top"></td>
-      <td class="px-3 py-2 align-top max-w-[320px] whitespace-pre-wrap"></td>
-    </tr>
-  </template>
-
   <script>
-    const LS_KEYS = {
-      entries: 'hobby.entries.v1',
-      categories: 'hobby.categories.v1',
-      subactivities: 'hobby.subactivities.v1'
-    };
+    const LS_KEYS = { entries: 'hobby.entries.v1' };
     const CLOUD_SYNC_URL = 'https://script.google.com/macros/s/AKfycbxSIFgAAr6umQ3SZmXZomU3c6-Vh4eLnRV1mIw-LTim_0jJaf41ipn0U4-1lHU4bWpyiw/exec';
     const CLOUD_SECRET = 'protect-hobbies';
+    let entries = [];
 
-    let entries = [], categories = [], subactivities = [];
-
-    const timersContainer = document.getElementById('timersContainer');
-    const newTimerBtn = document.getElementById('newTimerBtn');
-    const exportBtn = document.getElementById('exportBtn');
-    const importFile = document.getElementById('importFile');
-    const entriesTbody = document.getElementById('entriesTbody');
-    const rowTemplate = document.getElementById('rowTemplate');
     const totalMinutesEl = document.getElementById('totalMinutes');
     const totalHoursEl = document.getElementById('totalHours');
     const totalEntriesEl = document.getElementById('totalEntries');
     const byCategoryEl = document.getElementById('byCategory');
+    const entriesTbody = document.getElementById('entriesTbody');
 
-    const id = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
+    function saveAll(){ localStorage.setItem(LS_KEYS.entries, JSON.stringify(entries)); }
+    function loadAll(){ entries = JSON.parse(localStorage.getItem(LS_KEYS.entries) || '[]'); }
 
     async function pullFromCloud(){
       const res = await fetch(CLOUD_SYNC_URL);
       const data = await res.json();
-      if(Array.isArray(data.entries)) entries = data.entries;
-      saveAll();
+      if (Array.isArray(data.entries)) { entries = data.entries; saveAll(); }
     }
 
     async function pushToCloud(){
-      try {
-        const res = await fetch(CLOUD_SYNC_URL, {
-          method:'POST',
-          headers:{'Content-Type':'text/plain;charset=utf-8'},
-          body:JSON.stringify({secret:CLOUD_SECRET,entries})
-        });
-        let data=null; try{data=await res.json();}catch{}
-        if(res.ok&&(!data||data.ok!==false))return true;
-      }catch(err){console.error('Cloud save error',err);} return false;
+      await fetch(CLOUD_SYNC_URL, {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ secret: CLOUD_SECRET, entries })
+      });
     }
 
-    function saveAll(){
-      localStorage.setItem(LS_KEYS.entries,JSON.stringify(entries));
-      localStorage.setItem(LS_KEYS.categories,JSON.stringify(categories));
-      localStorage.setItem(LS_KEYS.subactivities,JSON.stringify(subactivities));
-    }
-    function loadAll(){
-      entries=JSON.parse(localStorage.getItem(LS_KEYS.entries)||'[]');
-      categories=JSON.parse(localStorage.getItem(LS_KEYS.categories)||'[]');
-      subactivities=JSON.parse(localStorage.getItem(LS_KEYS.subactivities)||'[]');
-    }
-
-    function ensureSeedData(){
-      if(categories.length===0) categories=[{name:'Arts & Crafts'},{name:'Gaming'},{name:'Reading'},{name:'Fitness'}];
-      if(subactivities.length===0) subactivities=[{name:'Painting Warhammer Minis',category:'Arts & Crafts'},{name:'Terrain for Carnevale',category:'Arts & Crafts'},{name:'Halo Flashpoint',category:'Gaming'}];
-    }
-
-    function refreshUI(){
-      const totalMin=entries.reduce((s,e)=>s+Number(e.minutes||0),0);
-      totalMinutesEl.textContent=String(totalMin);
-      totalHoursEl.textContent=(totalMin/60).toFixed(1);
-      totalEntriesEl.textContent=String(entries.length);
-      const byCat={}; entries.forEach(e=>{byCat[e.category]=(byCat[e.category]||0)+Number(e.minutes||0)});
+    function renderSummary(){
+      const totalMin = entries.reduce((s,e)=>s+Number(e.minutes||0),0);
+      totalMinutesEl.textContent = totalMin;
+      totalHoursEl.textContent = (totalMin/60).toFixed(1);
+      totalEntriesEl.textContent = entries.length;
+      const byCat = {};
+      entries.forEach(e=>{ byCat[e.category]=(byCat[e.category]||0)+Number(e.minutes||0); });
       byCategoryEl.innerHTML='';
-      Object.entries(byCat).forEach(([n,m])=>{const d=document.createElement('div');d.className='chip';d.textContent=`${n}: ${(m/60).toFixed(1)}h`;byCategoryEl.appendChild(d);});
-      entriesTbody.innerHTML='';
-      const sorted=entries.slice().sort((a,b)=>new Date(b.date)-new Date(a.date));
-      for(const e of sorted){
-        const tr=rowTemplate.content.firstElementChild.cloneNode(true);
-        const tds=tr.querySelectorAll('td');
-        tds[0].textContent=new Date(e.date).toLocaleString();
-        tds[1].textContent=e.category;
-        tds[2].textContent=e.subactivity;
-        tds[3].textContent=e.minutes;
-        tds[4].innerHTML=(e.tags||[]).map(t=>`<span class='chip'>${t}</span>`).join('');
-        tds[5].textContent=e.notes||'';
-        entriesTbody.appendChild(tr);
+      for(const [cat,min] of Object.entries(byCat)){
+        const div=document.createElement('div');
+        div.className='chip';
+        div.textContent=`${cat}: ${(min/60).toFixed(1)}h`;
+        byCategoryEl.appendChild(div);
       }
     }
 
-    newTimerBtn.addEventListener('click',()=>{
-      const div=document.createElement('div');
-      div.className='bg-white p-4 rounded-2xl shadow mb-4';
-      div.innerHTML=`
-        <div class="flex flex-wrap items-center gap-2">
-          <span class="timer text-2xl font-mono">00:00:00</span>
-          <button class="startBtn bg-blue-600 text-white px-2 py-1 rounded">Start</button>
-          <select class="category border rounded px-2 py-1">${categories.map(c=>`<option>${c.name}</option>`).join('')}</select>
-          <select class="sub border rounded px-2 py-1">${subactivities.map(s=>`<option>${s.name}</option>`).join('')}</select>
-          <input class="tags border rounded px-2 py-1" placeholder="Tags (comma separated)" />
-          <input class="notes border rounded px-2 py-1 flex-1" placeholder="Notes" />
-          <button class="submitBtn bg-green-600 text-white px-2 py-1 rounded">Submit</button>
-          <button class="removeBtn border px-2 py-1 rounded">✕</button>
-        </div>`;
-      timersContainer.appendChild(div);
-      setupTimer(div);
-    });
+    function renderTable(){
+      entriesTbody.innerHTML='';
+      entries.slice().sort((a,b)=>new Date(b.date)-new Date(a.date)).forEach(e=>{
+        const tr=document.createElement('tr');
+        tr.innerHTML=`
+          <td class="px-3 py-2">${new Date(e.date).toLocaleDateString()}</td>
+          <td class="px-3 py-2">${e.category}</td>
+          <td class="px-3 py-2">${e.subactivity}</td>
+          <td class="px-3 py-2">${e.minutes}</td>
+          <td class="px-3 py-2">${(e.tags||[]).map(t=>`<span class='chip'>${t}</span>`).join('')}</td>
+          <td class="px-3 py-2">${e.notes||''}</td>`;
+        entriesTbody.appendChild(tr);
+      });
+    }
 
-    function setupTimer(div){
-      let startTime=null,elapsed=0,interval=null,running=false;
-      const timerEl=div.querySelector('.timer');
-      const startBtn=div.querySelector('.startBtn');
-      const submitBtn=div.querySelector('.submitBtn');
-      const removeBtn=div.querySelector('.removeBtn');
+    // 🎨 Chart setup
+    let chart = null;
+    const ctx = document.getElementById('timeChart').getContext('2d');
+    const graphGroupBy = document.getElementById('graphGroupBy');
+    const graphTagFilter = document.getElementById('graphTagFilter');
+    const updateGraphBtn = document.getElementById('updateGraphBtn');
 
-      function updateDisplay(){
-        const totalSec=Math.floor(elapsed/1000);
-        const h=String(Math.floor(totalSec/3600)).padStart(2,'0');
-        const m=String(Math.floor((totalSec%3600)/60)).padStart(2,'0');
-        const s=String(totalSec%60).padStart(2,'0');
-        timerEl.textContent=`${h}:${m}:${s}`;
-      }
+    function renderGraph(){
+      const groupBy = graphGroupBy.value;
+      const tags = graphTagFilter.value.split(',').map(t=>t.trim().toLowerCase()).filter(Boolean);
+      const filtered = tags.length ? entries.filter(e=>e.tags.some(t=>tags.includes(t.toLowerCase()))) : entries;
 
-      startBtn.addEventListener('click',()=>{
-        if(!running){
-          running=true;
-          startTime=Date.now()-elapsed;
-          startBtn.textContent='Stop';
-          interval=setInterval(()=>{elapsed=Date.now()-startTime;updateDisplay();},500);
-        }else{
-          running=false;
-          clearInterval(interval);
-          elapsed=Date.now()-startTime;
-          startBtn.textContent='Start';
-          updateDisplay();
+      const grouped = {};
+      filtered.forEach(e=>{
+        const day = new Date(e.date).toISOString().split('T')[0];
+        const key = groupBy==='category'? e.category : e.subactivity;
+        grouped[day] ||= {};
+        grouped[day][key] = (grouped[day][key]||0) + Number(e.minutes||0);
+      });
+
+      const days = Object.keys(grouped).sort();
+      const labels = [...new Set(filtered.map(e=>groupBy==='category'?e.category:e.subactivity))];
+      const colors = labels.map((_,i)=>`hsl(${i*45%360},70%,65%)`);
+      const datasets = labels.map((label,i)=>({
+        label,
+        data: days.map(d=>(grouped[d]?.[label]||0)/60),
+        backgroundColor: colors[i],
+        stack: 'stack1'
+      }));
+
+      if(chart) chart.destroy();
+      chart = new Chart(ctx, {
+        type:'bar',
+        data:{ labels: days, datasets },
+        options:{
+          responsive:true,
+          plugins:{ tooltip:{ callbacks:{
+            label:(c)=>`${c.dataset.label}: ${c.formattedValue}h`
+          }}, legend:{ position:'bottom' } },
+          scales:{ x:{ stacked:true }, y:{ stacked:true, title:{ display:true, text:'Hours' } } }
         }
       });
-
-      removeBtn.addEventListener('click',()=>{clearInterval(interval);div.remove();});
-
-      submitBtn.addEventListener('click',async()=>{
-        const totalMinutes=Math.round(elapsed/60000);
-        if(totalMinutes<=0)return alert('Timer must run at least 1 minute');
-        const category=div.querySelector('.category').value;
-        const sub=div.querySelector('.sub').value;
-        const tags=div.querySelector('.tags').value.split(',').map(s=>s.trim()).filter(Boolean);
-        const notes=div.querySelector('.notes').value;
-        entries.push({id:id(),date:new Date().toISOString(),category,subactivity:sub,minutes:totalMinutes,tags,notes});
-        saveAll();await pushToCloud();refreshUI();clearInterval(interval);div.remove();
-      });
-
-      updateDisplay();
     }
 
-    exportBtn.addEventListener('click',()=>{
-      const blob=new Blob([JSON.stringify({entries,categories,subactivities},null,2)],{type:'application/json'});
-      const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='hobby-tracker-export.json';a.click();URL.revokeObjectURL(url);
-    });
+    updateGraphBtn.addEventListener('click', renderGraph);
 
-    importFile.addEventListener('change',async e=>{
-      const file=e.target.files?.[0];if(!file)return;const text=await file.text();
-      try{const data=JSON.parse(text);entries=data.entries||[];categories=data.categories||[];subactivities=data.subactivities||[];saveAll();await pushToCloud();refreshUI();alert('Import complete');}catch(err){alert('Import failed: '+err.message);}finally{importFile.value='';}
-    });
-
-    (async()=>{loadAll();ensureSeedData();await pullFromCloud().catch(()=>{});saveAll();refreshUI();})();
+    (async()=>{
+      loadAll();
+      await pullFromCloud().catch(()=>{});
+      saveAll();
+      renderSummary();
+      renderTable();
+      renderGraph();
+    })();
   </script>
 </body>
 </html>
