@@ -135,7 +135,34 @@
     function setupTimer(div){let startTime=null,elapsed=0,interval=null,running=false;const timerEl=div.querySelector('.timer');const startBtn=div.querySelector('.startBtn');const submitBtn=div.querySelector('.submitBtn');const removeBtn=div.querySelector('.removeBtn');function updateDisplay(){const totalSec=Math.floor(elapsed/1000);const h=String(Math.floor(totalSec/3600)).padStart(2,'0');const m=String(Math.floor((totalSec%3600)/60)).padStart(2,'0');const s=String(totalSec%60).padStart(2,'0');timerEl.textContent=`${h}:${m}:${s}`;}startBtn.addEventListener('click',()=>{if(!running){running=true;startTime=Date.now()-elapsed;startBtn.textContent='Stop';interval=setInterval(()=>{elapsed=Date.now()-startTime;updateDisplay();},500);}else{running=false;clearInterval(interval);elapsed=Date.now()-startTime;startBtn.textContent='Start';updateDisplay();}});removeBtn.addEventListener('click',()=>{clearInterval(interval);div.remove();});submitBtn.addEventListener('click',async()=>{const totalMinutes=Math.round(elapsed/60000);if(totalMinutes<=0)return alert('Timer must run at least 1 minute');const category=div.querySelector('.category').value;const sub=div.querySelector('.sub').value;const tags=div.querySelector('.tags').value.split(',').map(s=>s.trim()).filter(Boolean);const notes=div.querySelector('.notes').value;entries.push({id:id(),date:new Date().toISOString(),category,subactivity:sub,minutes:totalMinutes,tags,notes});saveAll();await pushToCloud();refreshUI();clearInterval(interval);div.remove();});updateDisplay();}
 
     exportBtn.addEventListener('click',()=>{const blob=new Blob([JSON.stringify({entries,categories,subactivities},null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='hobby-tracker-export.json';a.click();URL.revokeObjectURL(url);});
-    importFile.addEventListener('change',async e=>{const f=e.target.files?.[0];if(!f)return;const t=await f.text();try{const d=JSON.parse(t);entries=d.entries||[];categories=d.categories||[];subactivities=d.subactivities||[];saveAll();await pushToCloud();refreshUI();alert('Import complete');}catch(err){alert('Import failed: '+err.message);}finally{importFile.value='';}});
+importFile.addEventListener('change', async e => {
+  const file = e.target.files?.[0];
+  if (!file) return;
+  const text = await file.text();
+
+  try {
+    const data = JSON.parse(text);
+    if (!data || !Array.isArray(data.entries))
+      throw new Error('Invalid file structure');
+
+    entries = data.entries || [];
+    categories = data.categories || [];
+    subactivities = data.subactivities || [];
+
+    saveAll();
+    await pushToCloud();
+
+    // Wait a tiny bit before refreshing UI (avoids chart timing issue)
+    setTimeout(() => refreshUI(), 100);
+
+    alert('Import complete!');
+  } catch (err) {
+    console.error('Import error:', err);
+    alert('Import failed: ' + err.message);
+  } finally {
+    importFile.value = '';
+  }
+});
 
     updateGraphBtn.addEventListener('click',updateGraph);
 
