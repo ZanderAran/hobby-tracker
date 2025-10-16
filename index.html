@@ -59,6 +59,7 @@
               <th class="text-left px-3 py-2">Category</th>
               <th class="text-left px-3 py-2">Subactivity</th>
               <th class="text-left px-3 py-2">Minutes</th>
+              <th class="text-left px-3 py-2">Tags</th>
               <th class="text-left px-3 py-2">Notes</th>
             </tr>
           </thead>
@@ -71,6 +72,7 @@
   <template id="rowTemplate">
     <tr class="border-b">
       <td class="px-3 py-2 align-top font-mono"></td>
+      <td class="px-3 py-2 align-top"></td>
       <td class="px-3 py-2 align-top"></td>
       <td class="px-3 py-2 align-top"></td>
       <td class="px-3 py-2 align-top"></td>
@@ -154,7 +156,8 @@
         tds[1].textContent=e.category;
         tds[2].textContent=e.subactivity;
         tds[3].textContent=e.minutes;
-        tds[4].textContent=e.notes||'';
+        tds[4].innerHTML=(e.tags||[]).map(t=>`<span class='chip'>${t}</span>`).join('');
+        tds[5].textContent=e.notes||'';
         entriesTbody.appendChild(tr);
       }
     }
@@ -168,6 +171,7 @@
           <button class="startBtn bg-blue-600 text-white px-2 py-1 rounded">Start</button>
           <select class="category border rounded px-2 py-1">${categories.map(c=>`<option>${c.name}</option>`).join('')}</select>
           <select class="sub border rounded px-2 py-1">${subactivities.map(s=>`<option>${s.name}</option>`).join('')}</select>
+          <input class="tags border rounded px-2 py-1" placeholder="Tags (comma separated)" />
           <input class="notes border rounded px-2 py-1 flex-1" placeholder="Notes" />
           <button class="submitBtn bg-green-600 text-white px-2 py-1 rounded">Submit</button>
           <button class="removeBtn border px-2 py-1 rounded">✕</button>
@@ -176,69 +180,61 @@
       setupTimer(div);
     });
 
-function setupTimer(div) {
-  let startTime = null, elapsed = 0, interval = null, running = false;
-  const timerEl = div.querySelector('.timer');
-  const startBtn = div.querySelector('.startBtn');
-  const submitBtn = div.querySelector('.submitBtn');
-  const removeBtn = div.querySelector('.removeBtn');
+    function setupTimer(div){
+      let startTime=null,elapsed=0,interval=null,running=false;
+      const timerEl=div.querySelector('.timer');
+      const startBtn=div.querySelector('.startBtn');
+      const submitBtn=div.querySelector('.submitBtn');
+      const removeBtn=div.querySelector('.removeBtn');
 
-  function updateDisplay() {
-    const totalSec = Math.floor(elapsed / 1000);
-    const h = String(Math.floor(totalSec / 3600)).padStart(2, '0');
-    const m = String(Math.floor((totalSec % 3600) / 60)).padStart(2, '0');
-    const s = String(totalSec % 60).padStart(2, '0');
-    timerEl.textContent = `${h}:${m}:${s}`;
-  }
+      function updateDisplay(){
+        const totalSec=Math.floor(elapsed/1000);
+        const h=String(Math.floor(totalSec/3600)).padStart(2,'0');
+        const m=String(Math.floor((totalSec%3600)/60)).padStart(2,'0');
+        const s=String(totalSec%60).padStart(2,'0');
+        timerEl.textContent=`${h}:${m}:${s}`;
+      }
 
-  startBtn.addEventListener('click', () => {
-    if (!running) {
-      running = true;
-      startTime = Date.now() - elapsed; // resume where left off
-      startBtn.textContent = 'Stop';
-      interval = setInterval(() => {
-        elapsed = Date.now() - startTime;
-        updateDisplay();
-      }, 500);
-    } else {
-      running = false;
-      clearInterval(interval);
-      elapsed = Date.now() - startTime;
-      startBtn.textContent = 'Start';
+      startBtn.addEventListener('click',()=>{
+        if(!running){
+          running=true;
+          startTime=Date.now()-elapsed;
+          startBtn.textContent='Stop';
+          interval=setInterval(()=>{elapsed=Date.now()-startTime;updateDisplay();},500);
+        }else{
+          running=false;
+          clearInterval(interval);
+          elapsed=Date.now()-startTime;
+          startBtn.textContent='Start';
+          updateDisplay();
+        }
+      });
+
+      removeBtn.addEventListener('click',()=>{clearInterval(interval);div.remove();});
+
+      submitBtn.addEventListener('click',async()=>{
+        const totalMinutes=Math.round(elapsed/60000);
+        if(totalMinutes<=0)return alert('Timer must run at least 1 minute');
+        const category=div.querySelector('.category').value;
+        const sub=div.querySelector('.sub').value;
+        const tags=div.querySelector('.tags').value.split(',').map(s=>s.trim()).filter(Boolean);
+        const notes=div.querySelector('.notes').value;
+        entries.push({id:id(),date:new Date().toISOString(),category,subactivity:sub,minutes:totalMinutes,tags,notes});
+        saveAll();await pushToCloud();refreshUI();clearInterval(interval);div.remove();
+      });
+
       updateDisplay();
     }
-  });
 
-  removeBtn.addEventListener('click', () => {
-    clearInterval(interval);
-    div.remove();
-  });
-
-  submitBtn.addEventListener('click', async () => {
-    const totalMinutes = Math.round(elapsed / 60000);
-    if (totalMinutes <= 0) return alert('Timer must run at least 1 minute');
-    const category = div.querySelector('.category').value;
-    const sub = div.querySelector('.sub').value;
-    const notes = div.querySelector('.notes').value;
-    entries.push({
-      id: id(),
-      date: new Date().toISOString(),
-      category,
-      subactivity: sub,
-      minutes: totalMinutes,
-      tags: [],
-      notes,
+    exportBtn.addEventListener('click',()=>{
+      const blob=new Blob([JSON.stringify({entries,categories,subactivities},null,2)],{type:'application/json'});
+      const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='hobby-tracker-export.json';a.click();URL.revokeObjectURL(url);
     });
-    saveAll();
-    await pushToCloud();
-    refreshUI();
-    clearInterval(interval);
-    div.remove();
-  });
 
-  updateDisplay();
-}
-
+    importFile.addEventListener('change',async e=>{
+      const file=e.target.files?.[0];if(!file)return;const text=await file.text();
+      try{const data=JSON.parse(text);entries=data.entries||[];categories=data.categories||[];subactivities=data.subactivities||[];saveAll();await pushToCloud();refreshUI();alert('Import complete');}catch(err){alert('Import failed: '+err.message);}finally{importFile.value='';}
+    });
 
     (async()=>{loadAll();ensureSeedData();await pullFromCloud().catch(()=>{});saveAll();refreshUI();})();
   </script>
