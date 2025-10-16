@@ -4,14 +4,9 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Hobby Time Tracker</title>
-  <!-- Tailwind via CDN for quick styling -->
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    /* Simple utility for a fixed max width */
     .container { max-width: 1100px; }
-    /* Hide file input */
-    input[type="file"] { display:none; }
-    /* Simple chips — plain CSS since @apply doesn't work without a build step */
     .chip { display:inline-block; font-size:0.75rem; line-height:1rem; padding:0.25rem 0.5rem; border-radius:0.5rem; background:#e5e7eb; margin-right:0.25rem; margin-bottom:0.25rem; }
   </style>
 </head>
@@ -20,6 +15,7 @@
     <div class="container mx-auto px-4 py-4 flex items-center justify-between">
       <h1 class="text-xl font-semibold">Hobby Time Tracker</h1>
       <div class="flex items-center gap-2">
+        <button id="newTimerBtn" class="px-3 py-1.5 rounded bg-green-600 text-white hover:bg-green-500">＋ New Timer</button>
         <button id="exportBtn" class="px-3 py-1.5 rounded bg-slate-800 text-white hover:bg-slate-700">Export JSON</button>
         <label for="importFile" class="px-3 py-1.5 rounded bg-slate-200 hover:bg-slate-300 cursor-pointer">Import JSON</label>
         <input id="importFile" type="file" accept="application/json" />
@@ -28,81 +24,8 @@
   </header>
 
   <main class="container mx-auto px-4 py-6">
-    <!-- Entry Form -->
-    <section class="bg-white p-4 rounded-2xl shadow mb-6">
-      <h2 class="text-lg font-semibold mb-3">New Entry</h2>
-      <form id="entryForm" class="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
-        <div class="md:col-span-2">
-          <label class="block text-sm mb-1">Date & Time</label>
-          <input id="dateInput" type="datetime-local" class="w-full border rounded px-2 py-1" required />
-        </div>
+    <section id="timersContainer" class="mb-6"></section>
 
-        <div class="md:col-span-2">
-          <label class="block text-sm mb-1">Category</label>
-          <div class="flex gap-2">
-            <select id="categorySelect" class="w-full border rounded px-2 py-1"></select>
-            <button id="addCatBtn" type="button" title="Add new category" class="px-2 py-1 border rounded">＋</button>
-          </div>
-        </div>
-
-        <div class="md:col-span-3">
-          <label class="block text-sm mb-1">Subactivity</label>
-          <div class="flex gap-2">
-            <select id="subactivitySelect" class="w-full border rounded px-2 py-1"></select>
-            <button id="addSubBtn" type="button" title="Add new subactivity" class="px-2 py-1 border rounded">＋</button>
-          </div>
-        </div>
-
-        <div class="md:col-span-2">
-          <label class="block text-sm mb-1">Duration (minutes)</label>
-          <input id="durationInput" type="number" min="1" step="1" class="w-full border rounded px-2 py-1" placeholder="e.g. 90" required />
-        </div>
-
-        <div class="md:col-span-3">
-          <label class="block text-sm mb-1">Tags (comma‑separated)</label>
-          <input id="tagsInput" type="text" class="w-full border rounded px-2 py-1" placeholder="e.g. miniatures, painting" />
-        </div>
-
-        <div class="md:col-span-12">
-          <label class="block text-sm mb-1">Notes</label>
-          <textarea id="notesInput" rows="2" class="w-full border rounded px-2 py-2" placeholder="What did you do?"></textarea>
-        </div>
-
-        <div class="md:col-span-12 flex gap-2">
-          <button class="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-500" type="submit">Save Entry</button>
-          <button id="resetFormBtn" class="px-4 py-2 rounded border" type="button">Reset</button>
-        </div>
-      </form>
-    </section>
-
-    <!-- Filters -->
-    <section class="bg-white p-4 rounded-2xl shadow mb-6">
-      <h2 class="text-lg font-semibold mb-3">Filters</h2>
-      <div class="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
-        <div class="md:col-span-3">
-          <label class="block text-sm mb-1">Date From</label>
-          <input id="filterFrom" type="date" class="w-full border rounded px-2 py-1" />
-        </div>
-        <div class="md:col-span-3">
-          <label class="block text-sm mb-1">Date To</label>
-          <input id="filterTo" type="date" class="w-full border rounded px-2 py-1" />
-        </div>
-        <div class="md:col-span-3">
-          <label class="block text-sm mb-1">Category</label>
-          <select id="filterCategory" class="w-full border rounded px-2 py-1"></select>
-        </div>
-        <div class="md:col-span-3">
-          <label class="block text-sm mb-1">Tag Contains</label>
-          <input id="filterTag" type="text" class="w-full border rounded px-2 py-1" placeholder="e.g. painting" />
-        </div>
-        <div class="md:col-span-12 flex gap-2">
-          <button id="applyFiltersBtn" class="px-4 py-2 rounded bg-slate-800 text-white hover:bg-slate-700">Apply</button>
-          <button id="clearFiltersBtn" class="px-4 py-2 rounded border">Clear</button>
-        </div>
-      </div>
-    </section>
-
-    <!-- Summary -->
     <section class="bg-white p-4 rounded-2xl shadow mb-6">
       <h2 class="text-lg font-semibold mb-3">Summary</h2>
       <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -126,7 +49,6 @@
       </div>
     </section>
 
-    <!-- Entries Table -->
     <section class="bg-white p-4 rounded-2xl shadow">
       <h2 class="text-lg font-semibold mb-3">Entries</h2>
       <div class="overflow-x-auto">
@@ -137,9 +59,7 @@
               <th class="text-left px-3 py-2">Category</th>
               <th class="text-left px-3 py-2">Subactivity</th>
               <th class="text-left px-3 py-2">Minutes</th>
-              <th class="text-left px-3 py-2">Tags</th>
               <th class="text-left px-3 py-2">Notes</th>
-              <th class="px-3 py-2">Actions</th>
             </tr>
           </thead>
           <tbody id="entriesTbody"></tbody>
@@ -154,374 +74,140 @@
       <td class="px-3 py-2 align-top"></td>
       <td class="px-3 py-2 align-top"></td>
       <td class="px-3 py-2 align-top"></td>
-      <td class="px-3 py-2 align-top"></td>
       <td class="px-3 py-2 align-top max-w-[320px] whitespace-pre-wrap"></td>
-      <td class="px-3 py-2 align-top">
-        <div class="flex gap-2 justify-end">
-          <button class="editBtn px-2 py-1 rounded border">Edit</button>
-          <button class="deleteBtn px-2 py-1 rounded border text-red-700">Delete</button>
-        </div>
-      </td>
     </tr>
   </template>
 
   <script>
-    // --- Simple localStorage DB ---
     const LS_KEYS = {
       entries: 'hobby.entries.v1',
-      categories: 'hobby.categories.v1', // array of {name}
-      subactivities: 'hobby.subactivities.v1' // array of {name, category}
+      categories: 'hobby.categories.v1',
+      subactivities: 'hobby.subactivities.v1'
     };
+    const CLOUD_SYNC_URL = 'https://script.google.com/macros/s/AKfycbxSIFgAAr6umQ3SZmXZomU3c6-Vh4eLnRV1mIw-LTim_0jJaf41ipn0U4-1lHU4bWpyiw/exec';
+    const CLOUD_SECRET = 'protect-hobbies';
 
-    // --- Cloud sync config ---
-    const CLOUD_SYNC_URL = 'https://script.google.com/macros/s/AKfycbxSIFgAAr6umQ3SZmXZomU3c6-Vh4eLnRV1mIw-LTim_0jJaf41ipn0U4-1lHU4bWpyiw/exec'; // ends with /exec
-    const CLOUD_SECRET = 'protect-hobbies'; // must match Apps Script SECRET
+    let entries = [], categories = [], subactivities = [];
 
-    /** @type {Array<{id:string,date:string,category:string,subactivity:string,minutes:number,tags:string[],notes:string}>} */
-    let entries = [];
-    /** @type {Array<{name:string}>} */
-    let categories = [];
-    /** @type {Array<{name:string,category:string}>} */
-    let subactivities = [];
-
-    // --- Elements ---
-    const dateInput = document.getElementById('dateInput');
-    const categorySelect = document.getElementById('categorySelect');
-    const subactivitySelect = document.getElementById('subactivitySelect');
-    const durationInput = document.getElementById('durationInput');
-    const tagsInput = document.getElementById('tagsInput');
-    const notesInput = document.getElementById('notesInput');
-    const entryForm = document.getElementById('entryForm');
-    const resetFormBtn = document.getElementById('resetFormBtn');
-    const addCatBtn = document.getElementById('addCatBtn');
-    const addSubBtn = document.getElementById('addSubBtn');
-
-    const filterFrom = document.getElementById('filterFrom');
-    const filterTo = document.getElementById('filterTo');
-    const filterCategory = document.getElementById('filterCategory');
-    const filterTag = document.getElementById('filterTag');
-    const applyFiltersBtn = document.getElementById('applyFiltersBtn');
-    const clearFiltersBtn = document.getElementById('clearFiltersBtn');
-
+    const timersContainer = document.getElementById('timersContainer');
+    const newTimerBtn = document.getElementById('newTimerBtn');
+    const exportBtn = document.getElementById('exportBtn');
+    const importFile = document.getElementById('importFile');
+    const entriesTbody = document.getElementById('entriesTbody');
+    const rowTemplate = document.getElementById('rowTemplate');
     const totalMinutesEl = document.getElementById('totalMinutes');
     const totalHoursEl = document.getElementById('totalHours');
     const totalEntriesEl = document.getElementById('totalEntries');
     const byCategoryEl = document.getElementById('byCategory');
 
-    const entriesTbody = document.getElementById('entriesTbody');
-    const rowTemplate = document.getElementById('rowTemplate');
-
-    const exportBtn = document.getElementById('exportBtn');
-    const importFile = document.getElementById('importFile');
-
-    // --- Utils ---
     const id = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
 
     async function pullFromCloud(){
-      if (!CLOUD_SYNC_URL) return;
       const res = await fetch(CLOUD_SYNC_URL);
       const data = await res.json();
-      if (Array.isArray(data.entries)) {
-        entries = data.entries;
-        saveAll(); // keep local copy for offline
-      }
+      if(Array.isArray(data.entries)) entries = data.entries;
+      saveAll();
     }
 
     async function pushToCloud(){
-      if (!CLOUD_SYNC_URL) return true;
       try {
         const res = await fetch(CLOUD_SYNC_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // avoids preflight
-          body: JSON.stringify({ secret: CLOUD_SECRET, entries })
+          method:'POST',
+          headers:{'Content-Type':'text/plain;charset=utf-8'},
+          body:JSON.stringify({secret:CLOUD_SECRET,entries})
         });
-    
-        // Try to read JSON; if parsing fails, don't treat it as a hard error.
-        let data = null;
-        try { data = await res.json(); } catch (_) {}
-    
-        // Success if HTTP 2xx AND (no data or data.ok !== false)
-        if (res.ok && (!data || data.ok !== false)) {
-          console.log('Cloud save OK', { status: res.status, data });
-          return true;
-        }
-    
-        console.warn('Cloud save uncertain/failed', { status: res.status, data });
-        return false; // don't alert here; let caller decide
-      } catch (err) {
-        console.error('Cloud save error', err);
-        return false;
-      }
-    }
-    
-    function saveAll() {
-      localStorage.setItem(LS_KEYS.entries, JSON.stringify(entries));
-      localStorage.setItem(LS_KEYS.categories, JSON.stringify(categories));
-      localStorage.setItem(LS_KEYS.subactivities, JSON.stringify(subactivities));
+        let data=null; try{data=await res.json();}catch{}
+        if(res.ok&&(!data||data.ok!==false))return true;
+      }catch(err){console.error('Cloud save error',err);} return false;
     }
 
-    function loadAll() {
-      entries = JSON.parse(localStorage.getItem(LS_KEYS.entries) || '[]');
-      categories = JSON.parse(localStorage.getItem(LS_KEYS.categories) || '[]');
-      subactivities = JSON.parse(localStorage.getItem(LS_KEYS.subactivities) || '[]');
+    function saveAll(){
+      localStorage.setItem(LS_KEYS.entries,JSON.stringify(entries));
+      localStorage.setItem(LS_KEYS.categories,JSON.stringify(categories));
+      localStorage.setItem(LS_KEYS.subactivities,JSON.stringify(subactivities));
+    }
+    function loadAll(){
+      entries=JSON.parse(localStorage.getItem(LS_KEYS.entries)||'[]');
+      categories=JSON.parse(localStorage.getItem(LS_KEYS.categories)||'[]');
+      subactivities=JSON.parse(localStorage.getItem(LS_KEYS.subactivities)||'[]');
     }
 
-    function ensureSeedData() {
-      if (categories.length === 0) {
-        categories = [
-          { name: 'Arts & Crafts' },
-          { name: 'Gaming' },
-          { name: 'Reading' },
-          { name: 'Fitness' }
-        ];
-      }
-      if (subactivities.length === 0) {
-        subactivities = [
-          { name: 'Painting Warhammer Minis', category: 'Arts & Crafts' },
-          { name: 'Terrain for Carnevale', category: 'Arts & Crafts' },
-          { name: 'Halo Flashpoint', category: 'Gaming' }
-        ];
-      }
+    function ensureSeedData(){
+      if(categories.length===0) categories=[{name:'Arts & Crafts'},{name:'Gaming'},{name:'Reading'},{name:'Fitness'}];
+      if(subactivities.length===0) subactivities=[{name:'Painting Warhammer Minis',category:'Arts & Crafts'},{name:'Terrain for Carnevale',category:'Arts & Crafts'},{name:'Halo Flashpoint',category:'Gaming'}];
     }
 
-    function populateCategorySelects() {
-      const opts = ['<option value="">— Select —</option>']
-        .concat(categories.map(c => `<option value="${c.name}">${c.name}</option>`))
-        .join('');
-      categorySelect.innerHTML = opts;
-      filterCategory.innerHTML = '<option value="">All</option>' + categories.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
-    }
-
-    function populateSubactivitySelect() {
-      const cat = categorySelect.value;
-      const subs = subactivities.filter(s => !cat || s.category === cat);
-      const opts = ['<option value="">— Select —</option>']
-        .concat(subs.map(s => `<option value="${s.name}">${s.name}</option>`))
-        .join('');
-      subactivitySelect.innerHTML = opts;
-    }
-
-    function resetForm() {
-      const now = new Date();
-      now.setSeconds(0,0);
-      const local = new Date(now.getTime() - (now.getTimezoneOffset() * 60000)).toISOString().slice(0,16);
-      dateInput.value = local;
-      categorySelect.value = '';
-      populateSubactivitySelect();
-      durationInput.value = '';
-      tagsInput.value = '';
-      notesInput.value = '';
-      entryForm.dataset.editingId = '';
-    }
-
-    function addCategoryPrompt() {
-      const name = prompt('New category name:');
-      if (!name) return;
-      if (categories.some(c => c.name.toLowerCase() === name.toLowerCase())) return alert('Category already exists');
-      categories.push({ name });
-      saveAll();
-      populateCategorySelects();
-      categorySelect.value = name;
-      populateSubactivitySelect();
-    }
-
-    function addSubactivityPrompt() {
-      const cat = categorySelect.value || prompt('What category should this subactivity belong to?');
-      if (!cat) return;
-      const name = prompt('New subactivity name:');
-      if (!name) return;
-      if (!categories.some(c => c.name === cat)) categories.push({ name: cat });
-      if (subactivities.some(s => s.name.toLowerCase() === name.toLowerCase() && s.category === cat)) return alert('Subactivity already exists in this category');
-      subactivities.push({ name, category: cat });
-      saveAll();
-      populateCategorySelects();
-      categorySelect.value = cat;
-      populateSubactivitySelect();
-      subactivitySelect.value = name;
-    }
-
-    function getFilters() {
-      const from = filterFrom.value ? new Date(filterFrom.value) : null;
-      const to = filterTo.value ? new Date(filterTo.value) : null;
-      const cat = filterCategory.value || '';
-      const tag = filterTag.value.trim().toLowerCase();
-      return { from, to, cat, tag };
-    }
-
-    function applyFilters(list) {
-      const { from, to, cat, tag } = getFilters();
-      return list.filter(e => {
-        const d = new Date(e.date);
-        if (from && d < from) return false;
-        if (to) {
-          const end = new Date(to);
-          end.setHours(23,59,59,999);
-          if (d > end) return false;
-        }
-        if (cat && e.category !== cat) return false;
-        if (tag && !e.tags.some(t => t.toLowerCase().includes(tag))) return false;
-        return true;
-      });
-    }
-
-    function renderSummary(filtered) {
-      const totalMin = filtered.reduce((sum,e)=>sum+Number(e.minutes||0),0);
-      totalMinutesEl.textContent = String(totalMin);
-      totalHoursEl.textContent = (totalMin/60).toFixed(1);
-      totalEntriesEl.textContent = String(filtered.length);
-
-      const byCat = {};
-      filtered.forEach(e => { byCat[e.category] = (byCat[e.category]||0) + Number(e.minutes||0); });
-      byCategoryEl.innerHTML = '';
-      Object.entries(byCat).sort((a,b)=>b[1]-a[1]).forEach(([name,min]) => {
-        const div = document.createElement('div');
-        div.className = 'chip';
-        const hours = (min/60).toFixed(1);
-        div.textContent = `${name}: ${hours}h`;
-        byCategoryEl.appendChild(div);
-      });
-    }
-
-    function renderTable(filtered) {
-      entriesTbody.innerHTML = '';
-      const sorted = filtered.slice().sort((a,b)=> new Date(b.date) - new Date(a.date));
-      for (const e of sorted) {
-        const tr = rowTemplate.content.firstElementChild.cloneNode(true);
-        const tds = tr.querySelectorAll('td');
-        const dt = new Date(e.date);
-        tds[0].textContent = dt.toLocaleString();
-        tds[1].textContent = e.category;
-        tds[2].textContent = e.subactivity;
-        tds[3].textContent = e.minutes;
-        tds[4].innerHTML = e.tags.map(t => `<span class="chip">${t}</span>`).join('');
-        tds[5].textContent = e.notes || '';
-
-        tr.querySelector('.editBtn').addEventListener('click', ()=> startEdit(e.id));
-        tr.querySelector('.deleteBtn').addEventListener('click', ()=> deleteEntry(e.id));
+    function refreshUI(){
+      const totalMin=entries.reduce((s,e)=>s+Number(e.minutes||0),0);
+      totalMinutesEl.textContent=String(totalMin);
+      totalHoursEl.textContent=(totalMin/60).toFixed(1);
+      totalEntriesEl.textContent=String(entries.length);
+      const byCat={}; entries.forEach(e=>{byCat[e.category]=(byCat[e.category]||0)+Number(e.minutes||0)});
+      byCategoryEl.innerHTML='';
+      Object.entries(byCat).forEach(([n,m])=>{const d=document.createElement('div');d.className='chip';d.textContent=`${n}: ${(m/60).toFixed(1)}h`;byCategoryEl.appendChild(d);});
+      entriesTbody.innerHTML='';
+      const sorted=entries.slice().sort((a,b)=>new Date(b.date)-new Date(a.date));
+      for(const e of sorted){
+        const tr=rowTemplate.content.firstElementChild.cloneNode(true);
+        const tds=tr.querySelectorAll('td');
+        tds[0].textContent=new Date(e.date).toLocaleString();
+        tds[1].textContent=e.category;
+        tds[2].textContent=e.subactivity;
+        tds[3].textContent=e.minutes;
+        tds[4].textContent=e.notes||'';
         entriesTbody.appendChild(tr);
       }
     }
 
-    function refreshUI() {
-      const filtered = applyFilters(entries);
-      renderSummary(filtered);
-      renderTable(filtered);
+    newTimerBtn.addEventListener('click',()=>{
+      const div=document.createElement('div');
+      div.className='bg-white p-4 rounded-2xl shadow mb-4';
+      div.innerHTML=`
+        <div class="flex flex-wrap items-center gap-2">
+          <span class="timer text-2xl font-mono">00:00:00</span>
+          <button class="startBtn bg-blue-600 text-white px-2 py-1 rounded">Start</button>
+          <select class="category border rounded px-2 py-1">${categories.map(c=>`<option>${c.name}</option>`).join('')}</select>
+          <select class="sub border rounded px-2 py-1">${subactivities.map(s=>`<option>${s.name}</option>`).join('')}</select>
+          <input class="notes border rounded px-2 py-1 flex-1" placeholder="Notes" />
+          <button class="submitBtn bg-green-600 text-white px-2 py-1 rounded">Submit</button>
+          <button class="removeBtn border px-2 py-1 rounded">✕</button>
+        </div>`;
+      timersContainer.appendChild(div);
+      setupTimer(div);
+    });
+
+    function setupTimer(div){
+      let seconds=0,interval=null,running=false;
+      const timerEl=div.querySelector('.timer');
+      const startBtn=div.querySelector('.startBtn');
+      const submitBtn=div.querySelector('.submitBtn');
+      const removeBtn=div.querySelector('.removeBtn');
+      startBtn.addEventListener('click',()=>{
+        if(!running){running=true;startBtn.textContent='Stop';interval=setInterval(()=>{seconds++;const h=String(Math.floor(seconds/3600)).padStart(2,'0');const m=String(Math.floor(seconds%3600/60)).padStart(2,'0');const s=String(seconds%60).padStart(2,'0');timerEl.textContent=`${h}:${m}:${s}`;},1000);}else{running=false;startBtn.textContent='Start';clearInterval(interval);}});
+      removeBtn.addEventListener('click',()=>{clearInterval(interval);div.remove();});
+      submitBtn.addEventListener('click',async()=>{
+        if(seconds<10)return alert('Timer must run for at least 10 seconds');
+        const category=div.querySelector('.category').value;
+        const sub=div.querySelector('.sub').value;
+        const notes=div.querySelector('.notes').value;
+        const minutes=Math.round(seconds/60)||1;
+        entries.push({id:id(),date:new Date().toISOString(),category,subactivity:sub,minutes,tags:[],notes});
+        saveAll(); await pushToCloud(); refreshUI();
+        clearInterval(interval); div.remove();
+      });
     }
 
-    function startEdit(entryId) {
-      const e = entries.find(x => x.id === entryId);
-      if (!e) return;
-      const d = new Date(e.date);
-      d.setSeconds(0,0);
-      const local = new Date(d.getTime() - (d.getTimezoneOffset()*60000)).toISOString().slice(0,16);
-      dateInput.value = local;
-      categorySelect.value = e.category;
-      populateSubactivitySelect();
-      subactivitySelect.value = e.subactivity;
-      durationInput.value = e.minutes;
-      tagsInput.value = e.tags.join(', ');
-      notesInput.value = e.notes || '';
-      entryForm.dataset.editingId = e.id;
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
-
-    function deleteEntry(entryId) {
-      if (!confirm('Delete this entry?')) return;
-      entries = entries.filter(e => e.id !== entryId);
-      saveAll();
-      pushToCloud().catch(()=>{});
-      refreshUI();
-    }
-
-    // --- Event Listeners ---
-    addCatBtn.addEventListener('click', addCategoryPrompt);
-    addSubBtn.addEventListener('click', addSubactivityPrompt);
-    categorySelect.addEventListener('change', populateSubactivitySelect);
-
-    resetFormBtn.addEventListener('click', resetForm);
-
-    entryForm.addEventListener('submit', (ev) => {
-      ev.preventDefault();
-      const when = dateInput.value;
-      const category = categorySelect.value.trim();
-      const sub = subactivitySelect.value.trim();
-      const minutes = Number(durationInput.value);
-      const tags = tagsInput.value.split(',').map(s => s.trim()).filter(Boolean);
-      const notes = notesInput.value.trim();
-      if (!when || !category || !sub || !minutes) return alert('Please fill date, category, subactivity, and minutes.');
-
-      const existingId = entryForm.dataset.editingId;
-      if (existingId) {
-        const idx = entries.findIndex(e => e.id === existingId);
-        if (idx >= 0) entries[idx] = { ...entries[idx], date: new Date(when).toISOString(), category, subactivity: sub, minutes, tags, notes };
-        entryForm.dataset.editingId = '';
-      } else {
-        entries.push({ id: id(), date: new Date(when).toISOString(), category, subactivity: sub, minutes, tags, notes });
-      }
-      if (!categories.some(c => c.name === category)) categories.push({ name: category });
-      if (!subactivities.some(s => s.name === sub && s.category === category)) subactivities.push({ name: sub, category });
-
-      saveAll();
-      pushToCloud().catch(()=>{});
-      populateCategorySelects();
-      populateSubactivitySelect();
-      resetForm();
-      refreshUI();
+    exportBtn.addEventListener('click',()=>{
+      const blob=new Blob([JSON.stringify({entries,categories,subactivities},null,2)],{type:'application/json'});
+      const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='hobby-tracker-export.json';a.click();URL.revokeObjectURL(url);
     });
 
-    applyFiltersBtn.addEventListener('click', refreshUI);
-    clearFiltersBtn.addEventListener('click', () => {
-      filterFrom.value = '';
-      filterTo.value = '';
-      filterCategory.value = '';
-      filterTag.value = '';
-      refreshUI();
+    importFile.addEventListener('change',async e=>{
+      const file=e.target.files?.[0];if(!file)return;const text=await file.text();
+      try{const data=JSON.parse(text);entries=data.entries||[];categories=data.categories||[];subactivities=data.subactivities||[];saveAll();await pushToCloud();refreshUI();alert('Import complete');}catch(err){alert('Import failed: '+err.message);}finally{importFile.value='';}
     });
 
-    exportBtn.addEventListener('click', () => {
-      const payload = { exportedAt: new Date().toISOString(), entries, categories, subactivities };
-      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url; a.download = 'hobby-tracker-export.json';
-      a.click();
-      URL.revokeObjectURL(url);
-    });
-
-    importFile.addEventListener('change', async (e) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-      const text = await file.text();
-      try {
-        const data = JSON.parse(text);
-        if (!data || !Array.isArray(data.entries)) throw new Error('Invalid file');
-        entries = data.entries || [];
-        categories = data.categories || [];
-        subactivities = data.subactivities || [];
-        saveAll();
-        pushToCloud().catch(()=>{});
-        populateCategorySelects();
-        populateSubactivitySelect();
-        refreshUI();
-        alert('Import complete');
-      } catch (err) {
-        alert('Import failed: ' + err.message);
-      } finally {
-        importFile.value = '';
-      }
-    });
-
-    // --- Init (wrapped to allow await) ---
-    (async () => {
-      loadAll();
-      ensureSeedData();
-      await pullFromCloud().catch(()=>{}); // offline ok
-      saveAll();
-      populateCategorySelects();
-      populateSubactivitySelect();
-      resetForm();
-      refreshUI();
-    })();
+    (async()=>{loadAll();ensureSeedData();await pullFromCloud().catch(()=>{});saveAll();refreshUI();})();
   </script>
 </body>
 </html>
