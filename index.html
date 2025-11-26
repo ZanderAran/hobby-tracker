@@ -274,6 +274,66 @@
       setupTimer(div);
     });
 
+    // --- Persistent Timer Storage (local) ---
+function saveTimersState() {
+  const timers = [];
+  document.querySelectorAll('.timerRow').forEach(div => {
+    const startBtn = div.querySelector('.startBtn');
+    const running = startBtn.textContent === 'Stop';
+    const timerEl = div.querySelector('.timer');
+    const [h, m, s] = timerEl.textContent.split(':').map(Number);
+    const elapsed = ((h * 3600) + (m * 60) + s) * 1000;
+    const category = div.querySelector('.category').value;
+    const sub = div.querySelector('.sub').value;
+    const notes = div.querySelector('.notes').value;
+    const tags = div.querySelector('.tags')?.value || '';
+    timers.push({ running, elapsed, category, sub, notes, tags, savedAt: Date.now() });
+  });
+  localStorage.setItem('activeTimers', JSON.stringify(timers));
+}
+
+function loadTimersState() {
+  const data = localStorage.getItem('activeTimers');
+  if (!data) return;
+  const timers = JSON.parse(data);
+  timers.forEach(t => {
+    const div = addTimerRow(); // your function that creates a new timer row
+    const timerEl = div.querySelector('.timer');
+    const startBtn = div.querySelector('.startBtn');
+    div.querySelector('.category').value = t.category;
+    div.querySelector('.sub').value = t.sub;
+    div.querySelector('.notes').value = t.notes;
+    if (div.querySelector('.tags')) div.querySelector('.tags').value = t.tags;
+
+    let elapsed = t.elapsed;
+    const startTime = Date.now() - elapsed;
+    function updateDisplay() {
+      const totalSec = Math.floor(elapsed / 1000);
+      const h = String(Math.floor(totalSec / 3600)).padStart(2, '0');
+      const m = String(Math.floor((totalSec % 3600) / 60)).padStart(2, '0');
+      const s = String(totalSec % 60).padStart(2, '0');
+      timerEl.textContent = `${h}:${m}:${s}`;
+    }
+    updateDisplay();
+
+    if (t.running) {
+      startBtn.textContent = 'Stop';
+      const interval = setInterval(() => {
+        elapsed = Date.now() - startTime;
+        updateDisplay();
+        saveTimersState();
+      }, 500);
+      div.dataset.interval = interval;
+    }
+  });
+}
+
+// Hook into unload and startup
+window.addEventListener('beforeunload', saveTimersState);
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') saveTimersState();
+});
+    
     function setupTimer(div){
       let startTime = null, elapsed = 0, interval = null, running = false;
       const timerEl = div.querySelector('.timer');
@@ -330,7 +390,7 @@
         saveAll();
         await pushToCloud();
         refreshUI();
-
+        
         clearInterval(interval);
         div.remove();
       });
@@ -378,6 +438,7 @@
       await pullFromCloud().catch(()=>{});
       saveAll();
       refreshUI();
+      loadTimersState();
     })();
   </script>
 </body>
